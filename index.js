@@ -1,7 +1,7 @@
 require('dotenv').config()
 const express = require('express');
 const cors = require('cors');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port=process.env.POST || 5000;
 const app=express()
 
@@ -30,7 +30,7 @@ async function run() {
     // await client.connect();
 
   const jobCollection=client.db("jobs").collection("job")
-  const applycollection=client.db("jobs").collection("apply")
+  const applyCollection=client.db("jobs").collection("apply")
 
 //get all data
 app.get("/jobs",async(req,res)=>{
@@ -38,8 +38,45 @@ app.get("/jobs",async(req,res)=>{
   res.send(result)
 })
 
+//id base jobs 
+app.get("/jobs/:id", async(req,res)=>{
+  const id=req.params.id;
+  const query={_id: new ObjectId(id)}
+  const result=await jobCollection.findOne(query)
+  res.send(result)
+})
+
+// user email to access data
+app.get("/jobs-apply",async(req,res)=>{
+  const email=req.query.email 
+  const query = { applicant_email: email };
+  const result=await applyCollection.find(query).toArray();
+
+  for(const add of result){
+    // console.log(add.job_id)
+    const query2={_id: new ObjectId(add.job_id)}
+    const result2=await jobCollection.findOne(query2)
+    if (result2) {
+      add.title = result2.title;
+      add.location =result2.location;
+      add.company = result2.company;
+      add.company_logo =result2.company_logo;
+  }
+  }
+  res.send(result)
+
+})
+
+
 
 //post 
+app.post("/jobs-apply", async(req, res)=>{
+  const data=req.body;
+  console.log(data);
+ const result=await applyCollection.insertOne(data);
+ res.send(result)
+})
+
 app.post("/jobs", async(req, res)=>{
   const data=req.body;
   console.log(data);
