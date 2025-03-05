@@ -1,19 +1,59 @@
-require("dotenv").config();
+
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-const port = process.env.POST || 5000;
+const port = process.env.PORT || 5000;
 const app = express();
 
 //middleware
+
+// app.use(cors({
+//   origin: "http://localhost:5173",
+//   credentials: true, 
+// }));
+
 app.use(cors({
-  origin: "http://localhost:5000",
-  credentials: true, 
-}));
+  origin:["http://localhost:5173"],
+  credentials:true
+
+}))
 app.use(express.json());
 app.use(cookieParser());
+
+
+// const verifyToken = (req, res, next) => {
+//   const token = req.cookies?.token;
+
+//   if (!token) {
+//       return res.status(401).send({ message: 'unauthorized access' });
+//   }
+
+//   // verify the token
+//   jwt.verify(token,process.env.DATA_TOKEN, (err, decoded) => {
+//       if (err) {
+//           return res.status(401).send({ message: 'unauthorized access' });
+//       }
+//       req.user = decoded;
+//       next();
+//   })
+// }
+
+const verifyToken=(req,res,next)=>{
+  const token=req.cookies?.token
+  if(!token){
+    return res.status(401).send({message:"unauthorized access"})
+  }
+  //token verify
+  jwt.verify(token,process.env.DATA_TOKEN,(err,decoded)=>{
+    if(err){
+      return res.status(401).send({message:"unauthorized user"})
+    }
+    req.user=decoded
+    next()
+  })
+}
 
 // job-site
 //AglvyYde8uzKKdbS
@@ -28,6 +68,8 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   },
 });
+
+
 
 async function run() {
   try {
@@ -52,9 +94,15 @@ async function run() {
     });
 
     // user email to access data
-    app.get("/jobs-apply", async (req, res) => {
+    app.get("/jobs-apply", verifyToken, async (req, res) => {
       const email = req.query.email;
       const query = { applicant_email: email };
+
+      console.log(req.cookies?.token)
+      // token email !== query email
+      if (req.user.email !== req.query.email) {
+          return res.status(403).send({ message: 'forbidden access' })
+      }
       const result = await applyCollection.find(query).toArray();
 
       for (const add of result) {
@@ -88,20 +136,45 @@ async function run() {
 
     //jwt token
 
-    app.get("/jwt", async (req, res) => {
-      const email  = req.body;
-      console.log(email);
-      const token = jwt.sign(email, process.env.DATA_TOKEN, {
-        expiresIn: "10h",
-      });
-      res
-        .cookie("token", token, {
-          httpOnly: true,
-          secure: false,
-        })
-        // .send(token)
-        .send({ success: true,});
-    });
+    // app.post("/jwt", async (req, res) => {
+    //   const email = req.body
+    //   // const email=user.email
+    //   console.log("jwt section",email);
+      
+    //   const token = jwt.sign(email, process.env.DATA_TOKEN, {
+    //     expiresIn: "10h",
+    //   });
+    //   res
+    //     .cookie("token", token, {
+    //       httpOnly: true,
+    //       secure: false,
+    //       // sameSite: "lax",
+    //     })
+    //     // .send(token)
+    //     .send({ success: true,token });
+    // });
+
+    app.post("/jwt",async(req,res)=>{
+      const email=req.body
+      console.log("jwt",email)
+      const token=jwt.sign(email,process.env.DATA_TOKEN,{expiresIn:"5h"})
+      res.cookie("token",token,{
+        httpOnly:true,
+        secure:false
+      })
+      .send({success: true, token})
+
+    })
+
+    // jut token remove
+
+    app.post("/logout",(req,res)=>{
+      res.clearCookie("token",{
+        httpOnly:true,
+        secure:false
+      })
+      .send({success:true})
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
